@@ -1,0 +1,55 @@
+# docker-compose.local.yml — zero API keys required, fully offline
+# Usage: docker compose -f docker-compose.local.yml up --build
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    container_name: autoapply-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      FRONTEND_URL: "http://localhost:3000"
+      LOG_LEVEL: info
+      DATA_DIR: /app/data
+      # Force local keyword engine — no AI API calls
+      AI_MODE: local
+    volumes:
+      - backend-data:/app/data
+      - backend-uploads:/app/uploads
+      - backend-logs:/app/logs
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://localhost:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:4000"
+    container_name: autoapply-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-data:
+  backend-uploads:
+  backend-logs:

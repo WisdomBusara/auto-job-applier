@@ -1,0 +1,38 @@
+# ─── Dependencies ─────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── Build output ─────────────────────────────────────────────
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# ─── Environment ──────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+
+# ─── Data (local SQLite + uploads) ────────────────────────────
+backend/data/
+backend/uploads/
+backend/logs/
+*.db
+*.db-shm
+*.db-wal
+
+# ─── Vercel ───────────────────────────────────────────────────
+.vercel/
+
+# ─── TypeScript ───────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── IDE ──────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
