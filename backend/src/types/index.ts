@@ -26,10 +26,13 @@ export interface UserProfile {
   targetTitles: string[];
   targetLocations: string[];
   remotePreference: RemotePreference;
+  remoteOnly: boolean;
   targetIndustries: string[];
   excludeKeywords: string[];
   experienceLevel: ExperienceLevel;
   minSalary: number;
+  maxSalary: number;
+  salaryCurrency: string;
   workAuthorization: string;
   noticePeriod: string;
   preferEasyApply: boolean;

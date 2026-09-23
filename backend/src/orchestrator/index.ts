@@ -3,6 +3,7 @@ import { matchJobWithCV, generateApplicationPack, searchJobsWithAI } from "../ai
 import { LinkedInIntegration } from "../automation/linkedin.js";
 import { IndeedIntegration } from "../automation/indeed.js";
 import { GreenhouseIntegration } from "../automation/greenhouse.js";
+import { scrapeRemoteJobs } from "../automation/remote-scraper.js";
 import type { JobPlatform } from "../automation/platform.interface.js";
 import { logger } from "../utils/logger.js";
 import type { Job, UserProfile, ApplicationPack, LogLevel } from "../types/index.js";
@@ -111,9 +112,18 @@ export async function runPipeline(options: {
 // ─── Phase 1: Discover ────────────────────────────────────────────────────────
 
 async function discoverJobs(
-  options: { platforms?: string[]; useAISearch?: boolean }, profile: UserProfile
+  options: { platforms?: string[]; useAISearch?: boolean; useRemoteScraper?: boolean }, profile: UserProfile
 ): Promise<Job[]> {
   const jobs: Job[] = [];
+
+  // Remote job scraper (high-paying remote roles)
+  if (options.useRemoteScraper !== false && profile.remoteOnly) {
+    try {
+      const remoteJobs = await scrapeRemoteJobs(profile);
+      for (const j of remoteJobs) jobs.push(await db.upsertJob({ ...j, status: "pending" }));
+      log("info", `[orchestrator] Remote scraper: ${remoteJobs.length} jobs`);
+    } catch (err) { log("warn", `[orchestrator] Remote scraper failed: ${String(err)}`); }
+  }
 
   if (options.useAISearch !== false) {
     try {

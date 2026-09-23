@@ -121,10 +121,10 @@ const DEFAULT_PROFILE: UserProfile = {
   fullName: "Your Name", email: "user@example.com", phone: "",
   baseResume: "Upload your CV to get started.", baseCoverLetter: "",
   targetTitles: ["Software Engineer", "Full Stack Developer"],
-  targetLocations: ["Remote"], remotePreference: "Remote",
+  targetLocations: ["Remote"], remotePreference: "Remote", remoteOnly: true,
   targetIndustries: ["Tech", "SaaS", "AI"], excludeKeywords: [],
-  experienceLevel: "Mid", minSalary: 0, workAuthorization: "",
-  noticePeriod: "Immediate", preferEasyApply: true, automationMode: false,
+  experienceLevel: "Mid", minSalary: 80000, maxSalary: 0, salaryCurrency: "USD",
+  workAuthorization: "", noticePeriod: "Immediate", preferEasyApply: true, automationMode: false,
   minMatchScore: 65, maxApplicationsPerDay: 20, links: {}, credentials: {},
 };
 
