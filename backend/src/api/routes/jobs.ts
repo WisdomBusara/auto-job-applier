@@ -20,16 +20,18 @@ router.get("/stats", asyncHandler(async (_req, res) => {
 }));
 
 router.get("/:id", asyncHandler(async (req, res) => {
-  const job = await db.getJobById(req.params.id);
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const job = await db.getJobById(id);
   if (!job) { res.status(404).json({ success: false, error: "Job not found" }); return; }
   res.json({ success: true, data: job });
 }));
 
 router.delete("/:id", asyncHandler(async (req, res) => {
-  const job = await db.getJobById(req.params.id);
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const job = await db.getJobById(id);
   if (!job) { res.status(404).json({ success: false, error: "Job not found" }); return; }
-  await db.deleteJob(req.params.id);
-  res.json({ success: true, data: { deleted: req.params.id } });
+  await db.deleteJob(id);
+  res.json({ success: true, data: { deleted: id } });
 }));
 
 router.delete("/", asyncHandler(async (_req, res) => {

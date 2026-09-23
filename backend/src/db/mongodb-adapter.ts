@@ -17,11 +17,11 @@ const MONGODB_URL = process.env.MONGODB_URL || "mongodb://localhost:27017/auto-j
 
 let client: MongoClient;
 let db: Db;
-let usersCol: Collection;
-let jobsCol: Collection;
-let appsCol: Collection;
-let logsCol: Collection;
-let integrationsCol: Collection;
+let usersCol: Collection<any>;
+let jobsCol: Collection<any>;
+let appsCol: Collection<any>;
+let logsCol: Collection<any>;
+let integrationsCol: Collection<any>;
 
 async function connect() {
   if (db) return;
@@ -54,10 +54,10 @@ async function connect() {
   }
 }
 
-// Row mappers
+// Row mappers - convert ObjectId to string
 function mapUserDoc(doc: any): User {
   return {
-    id: doc._id,
+    id: String(doc._id),
     email: doc.email,
     profile: doc.profile as UserProfile,
     cvFilename: doc.cvFilename ?? null,
@@ -69,7 +69,7 @@ function mapUserDoc(doc: any): User {
 
 function mapJobDoc(doc: any): Job {
   return {
-    id: doc._id,
+    id: String(doc._id),
     platform: doc.platform,
     externalId: doc.externalId,
     title: doc.title,
@@ -96,7 +96,7 @@ function mapJobDoc(doc: any): Job {
 
 function mapApplicationDoc(doc: any): Application {
   return {
-    id: doc._id,
+    id: String(doc._id),
     jobId: doc.jobId,
     userId: doc.userId,
     jobTitle: doc.jobTitle,
@@ -114,7 +114,7 @@ function mapApplicationDoc(doc: any): Application {
 
 function mapLogDoc(doc: any): LogEntry {
   return {
-    id: doc._id,
+    id: String(doc._id),
     level: doc.level as LogLevel,
     message: doc.message,
     context: doc.context ?? null,
@@ -125,7 +125,7 @@ function mapLogDoc(doc: any): LogEntry {
 
 function mapIntegrationDoc(doc: any): Integration {
   return {
-    id: doc._id,
+    id: String(doc._id),
     platform: doc.platform,
     enabled: doc.enabled || false,
     config: doc.config || {},
@@ -253,7 +253,7 @@ export const mongoDbAdapter: DbAdapter = {
         }
       );
 
-      return (await mongoDbAdapter.getJobById(existing._id)) as Job;
+      return (await mongoDbAdapter.getJobById(String(existing._id))) as Job;
     }
 
     const id = uuidv4();

@@ -21,7 +21,7 @@ integrationsRouter.get("/", asyncHandler(async (_req, res) => {
 }));
 
 integrationsRouter.patch("/:platform", asyncHandler(async (req, res) => {
-  const { platform } = req.params;
+  const platform = Array.isArray(req.params.platform) ? req.params.platform[0] : req.params.platform;
   const { enabled, config } = req.body as { enabled?: boolean; config?: Record<string, unknown> };
   const existing = await db.getIntegration(platform);
   if (!existing) { res.status(404).json({ success: false, error: `Integration "${platform}" not found` }); return; }
