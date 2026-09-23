@@ -113,6 +113,39 @@ docker compose -f docker-compose.local.yml up --build
 
 ---
 
+## 1.5 Quick Start — Docker with MongoDB (VPS)
+
+If you have MongoDB running on a VPS, this is the recommended setup.
+
+```bash
+git clone <repo-url>
+cd auto-job-applier
+
+cp .env.example .env
+```
+
+Edit `.env`:
+```env
+AI_MODE=auto
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# MongoDB connection string
+MONGODB_URL=mongodb://user:password@your-vps-ip:27017/auto-job-applier
+# Or with MongoDB Atlas:
+# MONGODB_URL=mongodb+srv://user:password@cluster.mongodb.net/auto-job-applier
+
+# Optional: restrict CORS to your VPS domain
+FRONTEND_URL=https://your-vps-domain.com
+```
+
+```bash
+docker compose up --build
+```
+
+Open **https://your-vps-domain.com:3000** (or **http://your-vps-ip:3000** for development).
+
+---
+
 ## 2. Quick Start — Local Dev
 
 Run the backend and frontend directly on your machine (no Docker).
@@ -248,10 +281,11 @@ Priority order: **Gemini → OpenAI → Local**
 | `PORT` | `4000` | Backend HTTP port |
 | `NODE_ENV` | `production` | `development` \| `production` |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
-| `DATA_DIR` | `./data` | SQLite database directory |
+| `MONGODB_URL` | — | MongoDB connection string (uses MongoDB if set) |
+| `SUPABASE_URL` | — | Supabase URL (uses Supabase if MONGODB_URL not set) |
+| `SUPABASE_SERVICE_KEY` | — | Supabase service key |
+| `DATA_DIR` | `./data` | SQLite database directory (used if MongoDB/Supabase not set) |
 | `FRONTEND_URL` | `http://localhost:3000` | CORS allowed origin |
-| `SUPABASE_URL` | — | Optional Supabase URL (SQLite used if blank) |
-| `SUPABASE_SERVICE_KEY` | — | Optional Supabase service key |
 
 ### Frontend variables
 
@@ -278,7 +312,12 @@ auto-job-applier/
 │   ├── tsconfig.json             ← NodeNext, strict
 │   └── src/
 │       ├── types/index.ts        ← all domain types
-│       ├── db/index.ts           ← SQLite (5 tables)
+│       ├── db/
+│       │   ├── index.ts          ← adapter selector (MongoDB > Supabase > SQLite)
+│       │   ├── mongodb-adapter.ts ← MongoDB (async, VPS)
+│       │   ├── sqlite-db.ts      ← SQLite (sync, local)
+│       │   ├── supabase-adapter.ts ← Supabase (async, cloud)
+│       │   └── adapter.ts        ← interface
 │       ├── utils/logger.ts       ← Winston
 │       │
 │       ├── ai/
@@ -354,7 +393,7 @@ Express Backend (:4000)
     ├─ automation/ (Playwright)
     │    linkedin.ts, indeed.ts, greenhouse.ts
     │
-    └─ db/ (SQLite)
+    └─ db/ (MongoDB, Supabase, or SQLite)
          users, jobs, applications, logs, integrations
 ```
 
@@ -512,6 +551,45 @@ ports:
 1. Set `NEXT_PUBLIC_API_URL=https://your-server.com:4000` **before building**
 2. Open firewall ports 3000 and 4000
 3. Consider putting nginx in front for TLS
+
+### MongoDB connection issues
+
+**Can't connect to MongoDB:**
+
+```bash
+# Check MongoDB is running on your VPS
+ssh user@vps-ip
+mongosh  # or `mongo` for older versions
+
+# If not running, start it
+sudo systemctl start mongod
+
+# Check service status
+sudo systemctl status mongod
+```
+
+**Connection string examples:**
+
+```env
+# Local MongoDB (no auth):
+MONGODB_URL=mongodb://localhost:27017/auto-job-applier
+
+# VPS with authentication:
+MONGODB_URL=mongodb://myuser:mypassword@192.168.1.100:27017/auto-job-applier
+
+# MongoDB Atlas (cloud):
+MONGODB_URL=mongodb+srv://user:password@cluster0.abc123.mongodb.net/auto-job-applier
+
+# Add replica set if needed:
+MONGODB_URL=mongodb://user:pass@host1:27017,host2:27017/auto-job-applier?replicaSet=rs0
+```
+
+**Check connection from backend:**
+
+```bash
+docker compose logs backend | grep "MongoDB"
+# Should see: "MongoDB connected"
+```
 
 ---
 

@@ -1,11 +1,16 @@
 /**
- * db/index.ts — selects SQLite or Supabase at startup.
+ * db/index.ts — selects MongoDB, Supabase, or SQLite at startup.
  *
- * Local / Docker:  SUPABASE_URL not set → SQLite
- * Vercel / Cloud:  SUPABASE_URL set     → Supabase
+ * MongoDB:        MONGODB_URL set      → MongoDB
+ * Supabase:       SUPABASE_URL set     → Supabase
+ * Local / Docker: neither set          → SQLite
  */
 
 import type { DbAdapter } from "./adapter.js";
+
+// ─── MongoDB ──────────────────────────────────────────────────────────────────
+
+import mongoDbAdapter from "./mongodb-adapter.js";
 
 // ─── SQLite (synchronous, local/Docker) ───────────────────────────────────────
 
@@ -17,7 +22,8 @@ import { supabaseAdapter } from "./supabase-adapter.js";
 
 // ─── Export the right adapter ─────────────────────────────────────────────────
 
-export const db: DbAdapter =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
+export const db: DbAdapter = process.env.MONGODB_URL
+  ? mongoDbAdapter
+  : process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
     ? supabaseAdapter
     : sqliteDb;
