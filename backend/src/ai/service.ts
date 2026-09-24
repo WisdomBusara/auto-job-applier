@@ -13,7 +13,7 @@
  */
 
 import { logger } from "../utils/logger.js";
-import type { AIMatchResult, UserProfile, Job } from "../types/index.js";
+import type { AIMatchResult, UserProfile, Job, TailoredCv } from "../types/index.js";
 import {
   localMatchJobWithCV,
   localSearchJobs,
@@ -303,5 +303,176 @@ export async function parseCVWithAI(
   } catch (err) {
     logger.warn(`[ai] CV parse failed, using local`, { err: String(err) });
     return localParseCV(text);
+  }
+}
+
+// ─── answerScreeningQuestions ─────────────────────────────────────────────────
+
+/**
+ * Draft answers to company-specific application questions using only what the
+ * profile actually states. Questions the model cannot ground in the profile
+ * are omitted from the result — the ATS driver treats a missing answer as a
+ * reason to stop and ask the user, which is safer than inventing a claim about
+ * someone's work history.
+ */
+export async function answerScreeningQuestions(
+  questions: string[],
+  job: { title: string; company: string; description: string },
+  profile: UserProfile
+): Promise<Record<string, string>> {
+  logProvider();
+  if (questions.length === 0) return {};
+
+  const provider = getActiveProvider();
+  if (provider === "local") {
+    logger.info("[ai] Screening questions need a real model — skipping in local mode");
+    return {};
+  }
+
+  const prompt = `Answer job application questions for this candidate.
+
+JOB: ${job.title} at ${job.company}
+DESCRIPTION: ${job.description.slice(0, 1200)}
+
+CANDIDATE PROFILE:
+Name: ${profile.fullName}
+Experience level: ${profile.experienceLevel}
+Work authorization: ${profile.workAuthorization}
+Notice period: ${profile.noticePeriod}
+Salary expectation: ${profile.minSalary > 0 ? profile.minSalary + "+ " + profile.salaryCurrency : "open"}
+Target roles: ${profile.targetTitles.join(", ")}
+Resume summary: ${profile.baseResume.slice(0, 1200)}
+
+QUESTIONS:
+${questions.map((q, i) => `${i + 1}. ${q}`).join("\n")}
+
+Rules:
+- Answer ONLY from the profile above. Never invent employers, dates, degrees or numbers.
+- If the profile does not contain what a question asks for, omit that question entirely.
+- Keep each answer under 120 words, first person, plain prose.
+
+Return JSON mapping each question's exact text to its answer string. Omit unanswerable questions.`;
+
+  try {
+    const text = provider === "gemini"
+      ? await geminiGenerate(prompt)
+      : await openaiGenerate(prompt);
+
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [q, a] of Object.entries(parsed)) {
+      if (typeof a === "string" && a.trim()) out[q] = a.trim();
+    }
+    logger.info(`[ai] Answered ${Object.keys(out).length}/${questions.length} screening questions`);
+    return out;
+  } catch (err) {
+    logger.warn(`[ai] Screening-question answering failed`, { err: String(err) });
+    return {};
+  }
+}
+
+// ─── generateTailoredCv ───────────────────────────────────────────────────────
+
+/**
+ * Rewrite the candidate's CV for one specific job.
+ *
+ * This reorders and rewords what the CV already says — it surfaces the most
+ * relevant roles and bullets and drops the rest. It must never introduce an
+ * employer, job title, date, qualification or metric the original CV does not
+ * contain, because the output is submitted to real employers under the
+ * candidate's name.
+ *
+ * Returns null when no model is available or the result cannot be trusted; the
+ * caller then falls back to the original CV file.
+ */
+export async function generateTailoredCv(
+  cvText: string,
+  job: Pick<Job, "title" | "company" | "description">,
+  profile: UserProfile
+): Promise<TailoredCv | null> {
+  logProvider();
+  const provider = getActiveProvider();
+
+  if (provider === "local") {
+    logger.info("[ai] CV tailoring needs a real model — keeping the original CV");
+    return null;
+  }
+  if (!cvText.trim()) {
+    logger.warn("[ai] No CV text to tailor");
+    return null;
+  }
+
+  const prompt = `Rewrite this candidate's CV so it targets one specific job.
+
+TARGET JOB: ${job.title} at ${job.company}
+JOB DESCRIPTION:
+${job.description.slice(0, 2500)}
+
+CANDIDATE'S ACTUAL CV (the only source of truth):
+${cvText.slice(0, 6000)}
+
+Hard rules — this document is submitted to a real employer under the
+candidate's real name:
+- Use ONLY facts present in the CV above. Never invent or alter an employer,
+  job title, date, degree, certification, metric or technology.
+- You may reorder roles and bullets, drop irrelevant ones, and reword bullets
+  to use the job's vocabulary where the underlying fact is unchanged.
+- Do not claim experience with anything the CV does not mention.
+- Keep 3-6 bullets for recent roles, fewer for older ones.
+- If the CV lacks something the job asks for, leave it out. Do not paper over
+  the gap.
+
+Return JSON:
+{
+  "fullName": string,
+  "headline": string,
+  "contact": string,
+  "summary": string (2-3 sentences),
+  "skills": string[] (max 12, drawn from the CV),
+  "experience": [{ "company": string, "role": string, "dates": string, "bullets": string[] }],
+  "education": string[],
+  "changeNotes": string[] (what you reordered, reworded or dropped, and why)
+}`;
+
+  try {
+    const text = provider === "gemini"
+      ? await geminiGenerate(prompt)
+      : await openaiGenerate(prompt);
+
+    const parsed = JSON.parse(text) as Partial<TailoredCv>;
+    if (!parsed.experience || !Array.isArray(parsed.experience)) {
+      logger.warn("[ai] Tailored CV missing experience section — keeping the original");
+      return null;
+    }
+
+    const cv: TailoredCv = {
+      fullName:    parsed.fullName    || profile.fullName || "",
+      headline:    parsed.headline    || "",
+      contact:     parsed.contact     || [profile.email, profile.phone].filter(Boolean).join(" · "),
+      summary:     parsed.summary     || "",
+      skills:      (parsed.skills     ?? []).slice(0, 12),
+      experience:  parsed.experience.slice(0, 8).map((r) => ({
+        company: String(r?.company ?? ""),
+        role:    String(r?.role ?? ""),
+        dates:   String(r?.dates ?? ""),
+        bullets: Array.isArray(r?.bullets) ? r.bullets.map(String).slice(0, 8) : [],
+      })),
+      education:   (parsed.education  ?? []).map(String),
+      changeNotes: (parsed.changeNotes ?? []).map(String),
+    };
+
+    const unnamedRoles = cv.experience.filter((r) => !r.company && !r.role).length;
+    if (cv.experience.length === 0 || unnamedRoles === cv.experience.length) {
+      logger.warn("[ai] Tailored CV has no usable roles — keeping the original");
+      return null;
+    }
+
+    logger.info(
+      `[ai] Tailored CV for ${job.title} @ ${job.company}: ${cv.experience.length} roles, ${cv.skills.length} skills`
+    );
+    return cv;
+  } catch (err) {
+    logger.warn(`[ai] CV tailoring failed — keeping the original`, { err: String(err) });
+    return null;
   }
 }

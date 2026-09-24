@@ -87,67 +87,16 @@ export class GreenhouseIntegration extends BrowserBase implements JobPlatform {
     return jobs;
   }
 
-  async applyToJob(job: Job, coverLetter: string, cvPath: string): Promise<boolean> {
-    const page = this.requirePage();
-    try {
-      logger.info(`[greenhouse] Applying: ${job.title} @ ${job.company}`);
-      await page.goto(job.url, { waitUntil: "domcontentloaded" });
-      await this.delay(2000, 3000);
-
-      const firstNameInput = await page.$("#first_name").catch(() => null);
-      if (firstNameInput) await firstNameInput.fill("Applicant");
-
-      const lastNameInput = await page.$("#last_name").catch(() => null);
-      if (lastNameInput) await lastNameInput.fill("User");
-
-      const emailInput = await page.$("#email").catch(() => null);
-      if (emailInput) await emailInput.fill("user@example.com");
-
-      const phoneInput = await page.$("#phone").catch(() => null);
-      if (phoneInput) await phoneInput.fill("+1234567890");
-
-      if (cvPath) {
-        const resumeInput = await page.$('input[type="file"]#resume, input[type="file"][name*="resume"]').catch(() => null);
-        if (resumeInput) { await resumeInput.setInputFiles(cvPath); await this.delay(1500, 2500); }
-      }
-
-      const clArea = await page.$("textarea#cover_letter, textarea[name*='cover']").catch(() => null);
-      if (clArea && coverLetter) await clArea.fill(coverLetter.slice(0, 3900));
-
-      const linkedinInput = await page.$('input[id*="linkedin"], input[name*="linkedin"]').catch(() => null);
-      if (linkedinInput) await linkedinInput.fill("https://linkedin.com/in/applicant");
-
-      // Fill text inputs (excluding known fields)
-      const textQs = await page.$$("input[type='text']:not([id='first_name']):not([id='last_name']):not([id='email']):not([id='phone'])");
-      for (const inp of textQs) {
-        const v = await inp.inputValue().catch(() => "");
-        if (!v) await inp.fill("Yes");
-      }
-
-      // Pick first valid option in selects
-      const selects = await page.$$("select");
-      for (const sel of selects) {
-        const options = await sel.$$eval(
-          "option",
-          (opts: HTMLOptionElement[]) => opts.map((o) => o.value).filter((v) => v !== "")
-        );
-        if (options[0]) await sel.selectOption(options[0]);
-      }
-
-      const submitBtn = await page.$('input[type="submit"]#submit_app, button[type="submit"]').catch(() => null);
-      if (!submitBtn) { logger.warn(`[greenhouse] No submit button for ${job.title}`); return false; }
-
-      await submitBtn.click();
-      await this.delay(3000, 5000);
-
-      const success = await this.exists(".success, .confirmation, [class*='success']", 5000);
-      logger.info(`[greenhouse] Applied to ${job.title} — success=${success}`);
-      return success;
-    } catch (err) {
-      logger.error(`[greenhouse] Apply failed: ${job.title}`, { err: String(err) });
-      await this.screenshot(`apply-error-${job.id}`);
-      return false;
-    }
+  /**
+   * Discovery only. Submitting is handled by AtsApplicant, which fills the
+   * Greenhouse form from the user profile and refuses to submit an incomplete
+   * one — this class used to post a placeholder identity.
+   */
+  async applyToJob(job: Job, _coverLetter: string, _cvPath: string): Promise<boolean> {
+    logger.warn(
+      `[greenhouse] applyToJob is not used — route ${job.title} through AtsApplicant`
+    );
+    return false;
   }
 
   private stripHtml(html: string): string {
