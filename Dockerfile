@@ -98,7 +98,10 @@ WORKDIR /app
 
 COPY --from=frontend-builder /app/frontend/.next/standalone ./
 COPY --from=frontend-builder /app/frontend/.next/static ./.next/static
-COPY --from=frontend-builder /app/frontend/public ./public
+# The builder stage never receives frontend/public (it is empty, so git does
+# not track it) — COPYing it fails the build. Next only needs the directory to
+# exist at runtime.
+RUN mkdir -p public
 
 EXPOSE 3000
 ENV PORT=3000

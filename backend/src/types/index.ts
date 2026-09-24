@@ -197,3 +197,30 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
+
+// ─── Tailored CV ──────────────────────────────────────────────────────────────
+
+export interface TailoredCvRole {
+  company: string;
+  role: string;
+  dates: string;
+  bullets: string[];
+}
+
+/**
+ * A CV rewritten for one job. Every field is a re-selection or rewording of
+ * material already present in the candidate's uploaded CV — nothing here may
+ * introduce an employer, date, qualification or metric the original did not
+ * contain.
+ */
+export interface TailoredCv {
+  fullName: string;
+  headline: string;
+  contact: string;
+  summary: string;
+  skills: string[];
+  experience: TailoredCvRole[];
+  education: string[];
+  /** What the model changed and why, surfaced in the UI for review. */
+  changeNotes: string[];
+}

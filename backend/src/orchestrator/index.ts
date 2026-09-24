@@ -7,6 +7,7 @@ import { scrapeRemoteJobs } from "../automation/remote-scraper.js";
 import { fetchAtsBoardJobs } from "../automation/ats-boards.js";
 import { AtsApplicant } from "../automation/ats-driver.js";
 import { resolveApplyUrl, type AtsName } from "../automation/ats.js";
+import { tailorCvForJob } from "../cv/tailor.js";
 import type { JobPlatform } from "../automation/platform.interface.js";
 import { logger } from "../utils/logger.js";
 import type { Job, UserProfile, ApplicationPack, LogLevel } from "../types/index.js";
@@ -272,13 +273,20 @@ async function applyToJob(job: Job, profile: UserProfile, cvPath: string, cvText
       pack = rawPack as unknown as ApplicationPack;
     } catch { pack = null; }
 
+    // Build a CV targeted at this job. Falls back to the uploaded file when a
+    // tailored version cannot be produced.
+    const tailored = await tailorCvForJob(job, cvText, cvPath, profile);
+    if (tailored.tailored) {
+      log("info", `[orchestrator] Tailored CV for ${job.company}: ${tailored.changeNotes.length} change(s)`, job.id);
+    }
+
     let applied = false;
     const driver = await resolveDriver(job);
     if (driver) {
       const { platform, applyUrl } = driver;
       try {
         await platform.login(profile);
-        applied = await platform.applyToJob({ ...job, url: applyUrl }, coverLetter, cvPath);
+        applied = await platform.applyToJob({ ...job, url: applyUrl }, coverLetter, tailored.cvPath);
       } finally {
         await platform.close().catch(() => null);
       }

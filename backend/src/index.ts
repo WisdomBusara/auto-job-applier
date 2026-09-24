@@ -9,6 +9,7 @@ import { userRouter } from "./api/routes/user.js";
 import { logsRouter, integrationsRouter } from "./api/routes/logs.js";
 import { errorHandler, notFound } from "./api/middleware/error.js";
 import { getActiveProvider } from "./ai/service.js";
+import { startScheduler } from "./scheduler/index.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000", 10);
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
@@ -83,6 +84,8 @@ app.listen(PORT, "0.0.0.0", () => {
   if (provider === "local") {
     logger.info("   ⚡ Running in LOCAL mode — keyword engine active, no API calls");
   }
+
+  startScheduler();
 });
 
 export default app;
