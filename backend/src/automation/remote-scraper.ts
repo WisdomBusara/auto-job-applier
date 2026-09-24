@@ -2,10 +2,9 @@
  * Remote Job Scraper
  * Scrapes high-paying remote jobs from:
  * - We Work Remotely
- * - Remote.co
  * - RemoteOK
- * - GitHub Jobs API
- * - LinkedIn (via Playwright if logged in)
+ *
+ * Listing URLs are resolved to a real apply URL later, in ats.ts.
  */
 
 import axios from "axios";
@@ -102,7 +101,11 @@ async function scrapeRemoteOK(): Promise<RemoteScrapedJob[]> {
         jobs.push({
           title: item.title,
           company: item.company || "Unknown",
-          url: item.url,
+          // Both of these stay on remoteok.com — the outbound apply link is
+          // behind a gated /l/<id> redirect that bounces non-browser clients.
+          // Kept for the listing itself; see ats-boards.ts for jobs we can
+          // actually submit.
+          url: item.apply_url || item.url,
           salary: item.salary || undefined,
           salaryMin,
           salaryMax,
@@ -119,39 +122,6 @@ async function scrapeRemoteOK(): Promise<RemoteScrapedJob[]> {
     return jobs;
   } catch (err) {
     logger.warn(`[remote-scraper] RemoteOK failed: ${String(err)}`);
-    return [];
-  }
-}
-
-// ─── GitHub Jobs API ────────────────────────────────────────────────────────
-
-async function scrapeGitHubJobs(): Promise<RemoteScrapedJob[]> {
-  try {
-    const jobs: RemoteScrapedJob[] = [];
-    const response = await HTTP.get("https://jobs.github.com/positions.json", {
-      params: { location: "remote" },
-    });
-
-    const data = response.data;
-    if (Array.isArray(data)) {
-      for (const item of data) {
-        jobs.push({
-          title: item.title,
-          company: item.company,
-          url: item.url,
-          location: item.location || "Remote",
-          remote: true,
-          description: item.description?.substring(0, 500) || undefined,
-          postedAt: item.created_at,
-          source: "GitHub Jobs",
-        });
-      }
-    }
-
-    logger.info(`[remote-scraper] GitHub Jobs: ${jobs.length} jobs`);
-    return jobs;
-  } catch (err) {
-    logger.warn(`[remote-scraper] GitHub Jobs failed: ${String(err)}`);
     return [];
   }
 }
@@ -201,13 +171,12 @@ export async function scrapeRemoteJobs(profile: UserProfile): Promise<Job[]> {
   try {
     logger.info("[remote-scraper] Starting remote job scrape");
 
-    const [weWorkRemotely, remoteOk, gitHubJobs] = await Promise.all([
+    const [weWorkRemotely, remoteOk] = await Promise.all([
       scrapeWeWorkRemotely(),
       scrapeRemoteOK(),
-      scrapeGitHubJobs(),
     ]);
 
-    const allJobs = [...weWorkRemotely, ...remoteOk, ...gitHubJobs];
+    const allJobs = [...weWorkRemotely, ...remoteOk];
     logger.info(`[remote-scraper] Total jobs scraped: ${allJobs.length}`);
 
     const filtered = filterHighPaying(allJobs, profile);

@@ -4,6 +4,9 @@ import { LinkedInIntegration } from "../automation/linkedin.js";
 import { IndeedIntegration } from "../automation/indeed.js";
 import { GreenhouseIntegration } from "../automation/greenhouse.js";
 import { scrapeRemoteJobs } from "../automation/remote-scraper.js";
+import { fetchAtsBoardJobs } from "../automation/ats-boards.js";
+import { AtsApplicant } from "../automation/ats-driver.js";
+import { resolveApplyUrl, type AtsName } from "../automation/ats.js";
 import type { JobPlatform } from "../automation/platform.interface.js";
 import { logger } from "../utils/logger.js";
 import type { Job, UserProfile, ApplicationPack, LogLevel } from "../types/index.js";
@@ -34,6 +37,37 @@ const PLATFORM_REGISTRY: Record<string, () => JobPlatform> = {
 };
 function getPlatform(name: string): JobPlatform | null {
   const f = PLATFORM_REGISTRY[name]; return f ? f() : null;
+}
+
+const ATS_PLATFORMS = new Set<string>(["greenhouse", "lever", "ashby", "workable"]);
+
+/**
+ * Pick the driver that can actually submit this job.
+ *
+ * Jobs from the board scrapers carry a listing URL and no usable platform, so
+ * we follow the listing to the real apply page and route by whichever ATS is
+ * hosting it. Returns the resolved URL too — it is where the form lives, not
+ * where the listing was.
+ */
+async function resolveDriver(
+  job: Job
+): Promise<{ platform: JobPlatform; applyUrl: string } | null> {
+  // Hosted ATS boards all go through AtsApplicant — the per-board classes
+  // handle discovery only.
+  if (ATS_PLATFORMS.has(job.platform)) {
+    return { platform: new AtsApplicant(job.platform as AtsName), applyUrl: job.url };
+  }
+
+  const direct = getPlatform(job.platform);
+  if (direct) return { platform: direct, applyUrl: job.url };
+
+  const { url, ats } = await resolveApplyUrl(job.url);
+  if (!ats) {
+    log("info", `[orchestrator] No supported ATS behind ${job.url} — leaving for review`, job.id);
+    return null;
+  }
+  log("info", `[orchestrator] ${job.title}: resolved to ${ats} — ${url}`, job.id);
+  return { platform: new AtsApplicant(ats), applyUrl: url };
 }
 
 // ─── Logging Helper ───────────────────────────────────────────────────────────
@@ -115,6 +149,17 @@ async function discoverJobs(
   options: { platforms?: string[]; useAISearch?: boolean; useRemoteScraper?: boolean }, profile: UserProfile
 ): Promise<Job[]> {
   const jobs: Job[] = [];
+
+  // Hosted ATS boards — the only source whose postings carry a directly
+  // submittable apply URL. Runs first because these are the jobs we can
+  // actually complete end to end.
+  try {
+    const boardJobs = await fetchAtsBoardJobs(profile);
+    for (const j of boardJobs) jobs.push(await db.upsertJob({ ...j, status: "pending" }));
+    log("info", `[orchestrator] ATS boards: ${boardJobs.length} jobs`);
+  } catch (err) {
+    log("warn", `[orchestrator] ATS board fetch failed: ${String(err)}`);
+  }
 
   // Remote job scraper (high-paying remote roles)
   if (options.useRemoteScraper !== false && profile.remoteOnly) {
@@ -228,11 +273,15 @@ async function applyToJob(job: Job, profile: UserProfile, cvPath: string, cvText
     } catch { pack = null; }
 
     let applied = false;
-    const platform = getPlatform(job.platform);
-    if (platform) {
-      await platform.login(profile);
-      applied = await platform.applyToJob(job, coverLetter, cvPath);
-      await platform.close();
+    const driver = await resolveDriver(job);
+    if (driver) {
+      const { platform, applyUrl } = driver;
+      try {
+        await platform.login(profile);
+        applied = await platform.applyToJob({ ...job, url: applyUrl }, coverLetter, cvPath);
+      } finally {
+        await platform.close().catch(() => null);
+      }
     }
 
     await db.updateJobStatus(job.id, applied ? "success" : "skipped");

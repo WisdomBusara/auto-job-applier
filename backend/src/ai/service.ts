@@ -305,3 +305,68 @@ export async function parseCVWithAI(
     return localParseCV(text);
   }
 }
+
+// ─── answerScreeningQuestions ─────────────────────────────────────────────────
+
+/**
+ * Draft answers to company-specific application questions using only what the
+ * profile actually states. Questions the model cannot ground in the profile
+ * are omitted from the result — the ATS driver treats a missing answer as a
+ * reason to stop and ask the user, which is safer than inventing a claim about
+ * someone's work history.
+ */
+export async function answerScreeningQuestions(
+  questions: string[],
+  job: { title: string; company: string; description: string },
+  profile: UserProfile
+): Promise<Record<string, string>> {
+  logProvider();
+  if (questions.length === 0) return {};
+
+  const provider = getActiveProvider();
+  if (provider === "local") {
+    logger.info("[ai] Screening questions need a real model — skipping in local mode");
+    return {};
+  }
+
+  const prompt = `Answer job application questions for this candidate.
+
+JOB: ${job.title} at ${job.company}
+DESCRIPTION: ${job.description.slice(0, 1200)}
+
+CANDIDATE PROFILE:
+Name: ${profile.fullName}
+Experience level: ${profile.experienceLevel}
+Work authorization: ${profile.workAuthorization}
+Notice period: ${profile.noticePeriod}
+Salary expectation: ${profile.minSalary > 0 ? profile.minSalary + "+ " + profile.salaryCurrency : "open"}
+Target roles: ${profile.targetTitles.join(", ")}
+Resume summary: ${profile.baseResume.slice(0, 1200)}
+
+QUESTIONS:
+${questions.map((q, i) => `${i + 1}. ${q}`).join("\n")}
+
+Rules:
+- Answer ONLY from the profile above. Never invent employers, dates, degrees or numbers.
+- If the profile does not contain what a question asks for, omit that question entirely.
+- Keep each answer under 120 words, first person, plain prose.
+
+Return JSON mapping each question's exact text to its answer string. Omit unanswerable questions.`;
+
+  try {
+    const text = provider === "gemini"
+      ? await geminiGenerate(prompt)
+      : await openaiGenerate(prompt);
+
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [q, a] of Object.entries(parsed)) {
+      if (typeof a === "string" && a.trim()) out[q] = a.trim();
+    }
+    logger.info(`[ai] Answered ${Object.keys(out).length}/${questions.length} screening questions`);
+    return out;
+  } catch (err) {
+    logger.warn(`[ai] Screening-question answering failed`, { err: String(err) });
+    return {};
+  }
+}
