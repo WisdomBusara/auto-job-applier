@@ -16,6 +16,18 @@ const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
 
 const app = express();
 
+// ─── Process-level safety net ─────────────────────────────────────────────────
+// A stray rejection anywhere would otherwise terminate the process, dropping
+// in-flight requests and restarting the container. Log it and keep serving.
+
+process.on("unhandledRejection", (reason) => {
+  logger.error(`Unhandled promise rejection: ${String(reason)}`);
+});
+
+process.on("uncaughtException", (err) => {
+  logger.error(`Uncaught exception: ${err.stack ?? String(err)}`);
+});
+
 // ─── Core middleware ──────────────────────────────────────────────────────────
 
 app.use(

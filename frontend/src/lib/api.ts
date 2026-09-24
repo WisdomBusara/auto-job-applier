@@ -10,7 +10,17 @@ import type {
   ApiResponse,
 } from "@/types";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+/**
+ * Origin the API is served from.
+ *
+ * Every path below already carries its own `/api` prefix, so a configured URL
+ * ending in `/api` would produce `/api/api/...` and 404. Deployments behind a
+ * proxy that routes on `/api` naturally get configured that way, so trim it
+ * rather than depend on everyone writing the value the same.
+ */
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000")
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 
 async function request<T>(
   path: string,

@@ -493,9 +493,14 @@ export const mongoDbAdapter: DbAdapter = {
   },
 };
 
-// Initialize on module load
-connect().then(() => {
-  seedDefaults().catch((err) => logger.error(`Seed failed: ${String(err)}`));
-});
+// Connect on module load, but only when MongoDB is actually the chosen
+// adapter. db/index.ts imports this module unconditionally, so without the
+// guard an SQLite deployment still dials mongodb://localhost:27017, and the
+// rejection 30s later is unhandled and takes the whole process down.
+if (process.env.MONGODB_URL) {
+  connect()
+    .then(() => seedDefaults())
+    .catch((err) => logger.error(`[mongodb] Initialisation failed: ${String(err)}`));
+}
 
 export default mongoDbAdapter;
