@@ -49,7 +49,7 @@ export default function JobsPage() {
   const handleApply = async (job: Job) => {
     setApplyingId(job.id);
     try {
-      await applyApi.start({ platforms: [job.platform], useAISearch: false, maxApplications: 1 });
+      await applyApi.start({ platforms: [job.platform], maxApplications: 1 });
       await fetchJobs();
     } catch {
       // ignore
@@ -91,7 +91,7 @@ export default function JobsPage() {
       <div className="mb-6">
         <PipelineControl
           state={state}
-          onStart={() => void start({ useAISearch: true })}
+          onStart={() => void start()}
           onStop={() => void stop()}
           onRetry={() => void retry()}
           onScoreOnly={() => void scoreOnly()}

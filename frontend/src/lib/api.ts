@@ -110,7 +110,7 @@ export const jobsApi = {
 // ─── Apply / Orchestrator ─────────────────────────────────────────────────────
 
 export const applyApi = {
-  start: (opts?: { platforms?: string[]; useAISearch?: boolean; maxApplications?: number }) =>
+  start: (opts?: { platforms?: string[]; maxApplications?: number }) =>
     request<{ message: string; state: OrchestratorState }>("/api/apply/start", {
       method: "POST",
       body: JSON.stringify(opts ?? {}),

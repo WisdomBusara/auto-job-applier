@@ -23,14 +23,12 @@ router.post(
 
     const body = req.body as {
       platforms?: string[];
-      useAISearch?: boolean;
       maxApplications?: number;
     };
 
     // Fire-and-forget — client polls /status
     void runPipeline({
       platforms: body.platforms,
-      useAISearch: body.useAISearch ?? true,
       maxApplications: body.maxApplications,
     });
 

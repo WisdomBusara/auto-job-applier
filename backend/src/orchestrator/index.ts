@@ -1,5 +1,5 @@
 import { db } from "../db/index.js";
-import { matchJobWithCV, generateApplicationPack, searchJobsWithAI } from "../ai/service.js";
+import { matchJobWithCV, generateApplicationPack } from "../ai/service.js";
 import { LinkedInIntegration } from "../automation/linkedin.js";
 import { IndeedIntegration } from "../automation/indeed.js";
 import { GreenhouseIntegration } from "../automation/greenhouse.js";
@@ -89,7 +89,7 @@ function findCVPath(cvFilename: string | null): string {
 // ─── Main Pipeline ────────────────────────────────────────────────────────────
 
 export async function runPipeline(options: {
-  platforms?: string[]; useAISearch?: boolean; maxApplications?: number;
+  platforms?: string[]; maxApplications?: number;
 }): Promise<void> {
   if (state.isRunning) { logger.warn("[orchestrator] Already running"); return; }
 
@@ -147,7 +147,7 @@ export async function runPipeline(options: {
 // ─── Phase 1: Discover ────────────────────────────────────────────────────────
 
 async function discoverJobs(
-  options: { platforms?: string[]; useAISearch?: boolean; useRemoteScraper?: boolean }, profile: UserProfile
+  options: { platforms?: string[]; useRemoteScraper?: boolean }, profile: UserProfile
 ): Promise<Job[]> {
   const jobs: Job[] = [];
 
@@ -169,14 +169,6 @@ async function discoverJobs(
       for (const j of remoteJobs) jobs.push(await db.upsertJob({ ...j, status: "pending" }));
       log("info", `[orchestrator] Remote scraper: ${remoteJobs.length} jobs`);
     } catch (err) { log("warn", `[orchestrator] Remote scraper failed: ${String(err)}`); }
-  }
-
-  if (options.useAISearch !== false) {
-    try {
-      const aiJobs = await searchJobsWithAI(profile);
-      for (const j of aiJobs) jobs.push(await db.upsertJob({ ...j, status: "pending" }));
-      log("info", `[orchestrator] AI search: ${aiJobs.length} jobs`);
-    } catch (err) { log("warn", `[orchestrator] AI search failed: ${String(err)}`); }
   }
 
   const integrations = await db.listIntegrations();
@@ -326,7 +318,7 @@ export async function retryFailed(): Promise<void> {
   if (failed.length === 0) { log("info", "[orchestrator] No failed jobs to retry"); return; }
   log("info", `[orchestrator] Retrying ${failed.length} failed jobs`);
   await Promise.all(failed.map((j) => db.updateJobStatus(j.id, "pending")));
-  await runPipeline({ useAISearch: false });
+  await runPipeline({});
 }
 
 export async function scoreAllPending(): Promise<void> {

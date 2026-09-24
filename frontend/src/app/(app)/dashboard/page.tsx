@@ -59,7 +59,7 @@ export default function DashboardPage() {
       <div className="mb-6">
         <PipelineControl
           state={state}
-          onStart={() => void start({ useAISearch: true })}
+          onStart={() => void start()}
           onStop={() => void stop()}
           onRetry={() => void retry()}
           onScoreOnly={() => void scoreOnly()}

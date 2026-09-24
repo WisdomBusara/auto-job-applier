@@ -17,7 +17,6 @@ import type { AIMatchResult, UserProfile, Job, TailoredCv } from "../types/index
 import { UNTRUSTED_PREAMBLE, asUntrustedData } from "./untrusted.js";
 import {
   localMatchJobWithCV,
-  localSearchJobs,
   localParseCV,
   localGenerateApplicationPack,
 } from "./local-engine.js";
@@ -100,72 +99,6 @@ async function openaiGenerate(prompt: string): Promise<string> {
     response_format: { type: "json_object" },
   });
   return response.choices[0]?.message?.content ?? "{}";
-}
-
-// ─── searchJobsWithAI ─────────────────────────────────────────────────────────
-
-export async function searchJobsWithAI(
-  profile: UserProfile
-): Promise<Omit<Job, "id" | "status" | "createdAt" | "updatedAt">[]> {
-  logProvider();
-  const provider = getActiveProvider();
-
-  if (provider === "local") {
-    logger.info("[ai] searchJobs: local engine");
-    return localSearchJobs(profile);
-  }
-
-  const prompt = `Simulate 10-15 realistic job listings for a candidate:
-Titles: ${profile.targetTitles.join(", ")}
-Locations: ${profile.targetLocations.join(", ")} (${profile.remotePreference})
-Experience: ${profile.experienceLevel}
-Industries: ${profile.targetIndustries.join(", ")}
-Exclude: ${profile.excludeKeywords.join(", ")}
-Resume: ${profile.baseResume.slice(0, 400)}
-
-Return JSON array. Each item must have:
-platform(string), externalId(string), title(string), company(string),
-location(string), description(string, 2-3 sentences), url(string),
-salary(string|null), remote(boolean), seniority(string),
-employmentType(string), postedAt(ISO date string),
-matchScore(null), matchJustification([]), risksGaps(null),
-aiRecommendation(null), prediction(null), confidence(null)`;
-
-  try {
-    let text: string;
-    if (provider === "gemini") {
-      text = await geminiGenerate(prompt);
-    } else {
-      text = await openaiGenerate(prompt + "\n\nReturn a JSON array of job objects.");
-    }
-
-    const parsed = JSON.parse(text) as unknown;
-    const arr = Array.isArray(parsed) ? parsed : ((parsed as Record<string, unknown>).jobs as unknown[] ?? []);
-
-    return (arr as Array<Record<string, unknown>>).map((j) => ({
-      platform:           String(j.platform      ?? "linkedin"),
-      externalId:         String(j.externalId    ?? String(Date.now() + Math.random())),
-      title:              String(j.title         ?? ""),
-      company:            String(j.company       ?? ""),
-      location:           String(j.location      ?? ""),
-      description:        String(j.description   ?? ""),
-      url:                String(j.url           ?? "#"),
-      salary:             (j.salary as string | null) ?? null,
-      remote:             Boolean(j.remote),
-      seniority:          (j.seniority as string | null) ?? null,
-      employmentType:     (j.employmentType as string | null) ?? null,
-      postedAt:           (j.postedAt as string | null) ?? new Date().toISOString(),
-      matchScore:         null,
-      matchJustification: [],
-      risksGaps:          null,
-      aiRecommendation:   null,
-      prediction:         null,
-      confidence:         null,
-    }));
-  } catch (err) {
-    logger.warn(`[ai] ${provider} job search failed, falling back to local`, { err: String(err) });
-    return localSearchJobs(profile);
-  }
 }
 
 // ─── matchJobWithCV ───────────────────────────────────────────────────────────

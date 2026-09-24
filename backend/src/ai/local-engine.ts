@@ -244,55 +244,6 @@ const SALARIES = [
 
 const PLATFORMS = ["linkedin", "indeed", "greenhouse"];
 
-export function localSearchJobs(
-  profile: UserProfile
-): Omit<Job, "id" | "status" | "createdAt" | "updatedAt">[] {
-  const jobs: Omit<Job, "id" | "status" | "createdAt" | "updatedAt">[] = [];
-  const titles = profile.targetTitles.length > 0 ? profile.targetTitles : ["Software Engineer"];
-  const seenExternalIds = new Set<string>();
-
-  for (let i = 0; i < 12; i++) {
-    const title = titles[i % titles.length]!;
-    const company = SAMPLE_COMPANIES[i % SAMPLE_COMPANIES.length]!;
-    const platform = PLATFORMS[i % PLATFORMS.length]!;
-    const isRemote = profile.remotePreference === "Remote" || i % 3 === 0;
-    const location = isRemote ? "Remote" : (LOCATIONS[i % LOCATIONS.length] ?? "Remote");
-    const description = SAMPLE_DESCRIPTIONS[title] ?? SAMPLE_DESCRIPTIONS["Software Engineer"]!;
-    const externalId = `local-${Date.now()}-${i}`;
-
-    if (seenExternalIds.has(externalId)) continue;
-    seenExternalIds.add(externalId);
-
-    const postedDaysAgo = Math.floor(Math.random() * 14);
-    const postedAt = new Date(Date.now() - postedDaysAgo * 86400000).toISOString();
-
-    jobs.push({
-      platform,
-      externalId,
-      title,
-      company,
-      location,
-      description,
-      url: `https://example.com/jobs/${platform}/${i + 1}`,
-      salary: SALARIES[i % SALARIES.length] ?? null,
-      remote: isRemote,
-      seniority: profile.experienceLevel,
-      employmentType: "Full-time",
-      postedAt,
-      matchScore: null,
-      matchJustification: [],
-      risksGaps: null,
-      aiRecommendation: null,
-      prediction: null,
-      confidence: null,
-    });
-  }
-
-  return jobs;
-}
-
-// ─── Public: parse CV without AI ──────────────────────────────────────────────
-
 export function localParseCV(text: string): Partial<UserProfile> {
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
 

@@ -40,7 +40,7 @@ export function usePipeline() {
   }, [state.isRunning, refresh]);
 
   const start = useCallback(
-    async (opts?: { platforms?: string[]; useAISearch?: boolean; maxApplications?: number }) => {
+    async (opts?: { platforms?: string[]; maxApplications?: number }) => {
       setError(null);
       try {
         const res = await applyApi.start(opts);

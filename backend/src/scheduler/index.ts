@@ -61,7 +61,7 @@ async function tick(quiet: QuietWindow | null): Promise<void> {
 
   logger.info("[scheduler] Starting scheduled run");
   try {
-    await runPipeline({ useAISearch: false });
+    await runPipeline({});
   } catch (err) {
     logger.error(`[scheduler] Scheduled run failed: ${String(err)}`);
   }
