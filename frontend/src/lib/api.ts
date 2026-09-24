@@ -26,15 +26,36 @@ async function request<T>(
   path: string,
   opts: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...opts.headers },
-    ...opts,
-  });
+  const url = `${BASE}${path}`;
 
-  const json = (await res.json()) as ApiResponse<T>;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "Content-Type": "application/json", ...opts.headers },
+      ...opts,
+    });
+  } catch (err) {
+    // DNS failure, refused connection, CORS, offline.
+    throw new Error(`Cannot reach the API at ${url} — ${String(err)}`);
+  }
+
+  // A misrouted request often lands on a proxy or the Next.js app itself and
+  // comes back as HTML, which would otherwise surface as a JSON parse error
+  // and hide where the request actually went.
+  const body = await res.text();
+  let json: ApiResponse<T>;
+  try {
+    json = JSON.parse(body) as ApiResponse<T>;
+  } catch {
+    throw new Error(
+      `${res.status} from ${url} — expected JSON, got ${body.slice(0, 80).trim() || "an empty body"}`
+    );
+  }
 
   if (!json.success || !res.ok) {
-    throw new Error(json.error ?? `Request failed: ${res.status}`);
+    // Name the URL: a 404 here almost always means the base URL and the path
+    // disagree, and the message alone does not show that.
+    throw new Error(`${json.error ?? `Request failed: ${res.status}`} (${res.status} ${url})`);
   }
   return json.data as T;
 }
