@@ -162,6 +162,11 @@ async function seedDefaults() {
       maxApplicationsPerDay: 20,
       links: {},
       credentials: {},
+      screening: {
+        authorizedToWork: null, requiresSponsorship: null, openToRelocation: null,
+        willingToRelocateTo: "", yearsOfExperience: null, earliestStartDate: "",
+        howDidYouHear: "", answerBank: [],
+      },
     };
 
     await usersCol.insertOne({

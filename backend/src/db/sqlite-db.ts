@@ -112,6 +112,11 @@ if (userCount === 0) {
     experienceLevel: "Mid", minSalary: 80000, maxSalary: 0, salaryCurrency: "USD",
     workAuthorization: "", noticePeriod: "Immediate", preferEasyApply: true, automationMode: false,
     minMatchScore: 65, maxApplicationsPerDay: 20, links: {}, credentials: {},
+    screening: {
+      authorizedToWork: null, requiresSponsorship: null, openToRelocation: null,
+      willingToRelocateTo: "", yearsOfExperience: null, earliestStartDate: "",
+      howDidYouHear: "", answerBank: [],
+    },
   };
   sqlite.prepare("INSERT INTO users (id, email, profile) VALUES (?, ?, ?)").run(
     uuidv4(), "user@example.com", JSON.stringify(defaultProfile)

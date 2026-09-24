@@ -50,6 +50,35 @@ export interface UserProfile {
     indeedEmail?: string;
     indeedPassword?: string;
   };
+  /** Optional: profiles stored before this field existed will not have it. */
+  screening?: ScreeningAnswers;
+}
+
+// ─── Screening answers ────────────────────────────────────────────────────────
+
+/**
+ * Answers to the standard questions application forms ask.
+ *
+ * These are facts and legal attestations, so they are stored as explicit
+ * fields and never inferred by a model — an application submitted under the
+ * candidate's name should not contain a guess about their right to work.
+ */
+export interface ScreeningAnswers {
+  /** Legally authorised to work in the target country without sponsorship. */
+  authorizedToWork: boolean | null;
+  /** Needs visa sponsorship now or in the future. */
+  requiresSponsorship: boolean | null;
+  openToRelocation: boolean | null;
+  willingToRelocateTo: string;
+  yearsOfExperience: number | null;
+  earliestStartDate: string;
+  howDidYouHear: string;
+  /**
+   * Reusable free-text answers. `pattern` is matched case-insensitively
+   * against the question; `{company}`, `{role}` and `{title}` in the answer
+   * are substituted from the job.
+   */
+  answerBank: Array<{ pattern: string; answer: string }>;
 }
 
 export interface User {

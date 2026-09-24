@@ -3,6 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { db } from "../../db/index.js";
+import { EMPTY_SCREENING } from "../../automation/screening.js";
 import { parseCVWithAI } from "../../ai/service.js";
 import { asyncHandler } from "../middleware/error.js";
 import type { UserProfile } from "../../types/index.js";
@@ -54,6 +55,9 @@ router.patch("/", asyncHandler(async (req, res) => {
     ...user.profile, ...body,
     credentials: { ...user.profile.credentials, ...(body.credentials ?? {}) },
     links:       { ...user.profile.links,       ...(body.links       ?? {}) },
+    // Merged like the others so a partial update (e.g. just the answer bank)
+    // does not wipe the rest of the screening answers.
+    screening:   { ...EMPTY_SCREENING, ...user.profile.screening, ...(body.screening ?? {}) },
   };
   const updated = await db.updateUser({ email: body.email ?? user.email, profile: updatedProfile });
   res.json({ success: true, data: updated });

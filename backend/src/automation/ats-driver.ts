@@ -18,6 +18,7 @@ import { BrowserBase } from "./browser.base.js";
 import type { JobPlatform, RawJob } from "./platform.interface.js";
 import type { Job, UserProfile } from "../types/index.js";
 import { answerScreeningQuestions } from "../ai/service.js";
+import { answerAllFromProfile } from "./screening.js";
 import { logger } from "../utils/logger.js";
 import type { AtsName } from "./ats.js";
 
@@ -238,16 +239,26 @@ export class AtsApplicant extends BrowserBase implements JobPlatform {
 
     if (pending.length === 0) return;
 
-    let answers: Record<string, string>;
-    try {
-      answers = await answerScreeningQuestions(
-        pending.map((q) => q.label),
-        { title: job.title, company: job.company, description: job.description },
-        profile
-      );
-    } catch (err) {
-      logger.warn(`[${this.ats}] Screening-question answering failed: ${String(err)}`);
-      return;
+    // Facts and legal attestations come from the profile, never from a model.
+    const split = answerAllFromProfile(pending.map((q) => q.label), profile, job);
+    const answers: Record<string, string> = { ...split.answered };
+    logger.info(
+      `[${this.ats}] Screening: ${Object.keys(split.answered).length} from profile, ` +
+        `${split.remaining.length} to draft, ${split.withheld.length} withheld`
+    );
+
+    // Only open-ended questions reach the model.
+    if (split.remaining.length > 0) {
+      try {
+        const drafted = await answerScreeningQuestions(
+          split.remaining,
+          { title: job.title, company: job.company, description: job.description },
+          profile
+        );
+        Object.assign(answers, drafted);
+      } catch (err) {
+        logger.warn(`[${this.ats}] Screening-question drafting failed: ${String(err)}`);
+      }
     }
 
     for (const q of pending) {
