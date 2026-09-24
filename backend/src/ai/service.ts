@@ -14,6 +14,7 @@
 
 import { logger } from "../utils/logger.js";
 import type { AIMatchResult, UserProfile, Job, TailoredCv } from "../types/index.js";
+import { UNTRUSTED_PREAMBLE, asUntrustedData } from "./untrusted.js";
 import {
   localMatchJobWithCV,
   localSearchJobs,
@@ -185,8 +186,10 @@ export async function matchJobWithCV(
 
   const prompt = `Evaluate this job match and return JSON.
 
+${UNTRUSTED_PREAMBLE}
+
 JOB: ${job.title} at ${job.company}
-DESCRIPTION: ${job.description.slice(0, 2000)}
+${asUntrustedData("job_posting", job.description.slice(0, 2000))}
 
 CANDIDATE CV:
 ${cvText.slice(0, 2000)}
@@ -236,7 +239,11 @@ export async function generateApplicationPack(
   }
 
   const prompt = `Generate a job application pack for:
+
+${UNTRUSTED_PREAMBLE}
+
 JOB: ${job.title} at ${job.company} — ${job.url}
+${asUntrustedData("job_posting", (job.description ?? "").slice(0, 1200))}
 CANDIDATE: ${profile.fullName} (${profile.experienceLevel})
 RESUME: ${profile.baseResume.slice(0, 400)}
 COVER LETTER (use as-is): ${coverLetter.slice(0, 600)}
@@ -331,8 +338,10 @@ export async function answerScreeningQuestions(
 
   const prompt = `Answer job application questions for this candidate.
 
+${UNTRUSTED_PREAMBLE}
+
 JOB: ${job.title} at ${job.company}
-DESCRIPTION: ${job.description.slice(0, 1200)}
+${asUntrustedData("job_posting", job.description.slice(0, 1200))}
 
 CANDIDATE PROFILE:
 Name: ${profile.fullName}
@@ -404,9 +413,10 @@ export async function generateTailoredCv(
 
   const prompt = `Rewrite this candidate's CV so it targets one specific job.
 
+${UNTRUSTED_PREAMBLE}
+
 TARGET JOB: ${job.title} at ${job.company}
-JOB DESCRIPTION:
-${job.description.slice(0, 2500)}
+${asUntrustedData("job_posting", job.description.slice(0, 2500))}
 
 CANDIDATE'S ACTUAL CV (the only source of truth):
 ${cvText.slice(0, 6000)}

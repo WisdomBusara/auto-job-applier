@@ -18,6 +18,7 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
 } from "docx";
 import { generateTailoredCv } from "../ai/service.js";
+import { auditTailoredCv, pruneUngrounded } from "./grounding.js";
 import { logger } from "../utils/logger.js";
 import type { Job, UserProfile, TailoredCv } from "../types/index.js";
 
@@ -134,6 +135,33 @@ export async function tailorCvForJob(
   }
   if (!cv) return fallback;
 
+  // Verify the draft against the uploaded CV before it can be attached to an
+  // application. The prompt forbids invention; this checks it.
+  const findings = auditTailoredCv(cv, cvText);
+  const notes = [...cv.changeNotes];
+
+  if (findings.length > 0) {
+    for (const f of findings) {
+      logger.warn(
+        `[cv] Ungrounded ${f.kind} (${f.severity}) in ${job.company} CV: "${f.claim}" at ${f.where}`
+      );
+    }
+
+    const { cv: pruned, repairable } = pruneUngrounded(cv, findings);
+    if (!repairable) {
+      logger.warn(
+        `[cv] Tailored CV for ${job.company} names an employer absent from the source CV — using the original`
+      );
+      return fallback;
+    }
+
+    const dropped = findings.filter((f) => f.severity === "error").length;
+    if (dropped > 0) {
+      notes.push(`Removed ${dropped} claim(s) not supported by your uploaded CV.`);
+    }
+    cv = pruned;
+  }
+
   try {
     fs.mkdirSync(TAILORED_DIR, { recursive: true });
     const filename = `cv-${slug(cv.fullName || profile.fullName)}-${slug(job.company)}-${job.id.slice(0, 8)}.docx`;
@@ -143,7 +171,7 @@ export async function tailorCvForJob(
     fs.writeFileSync(outPath, buffer);
 
     logger.info(`[cv] Tailored CV written: ${outPath}`);
-    return { cvPath: outPath, tailored: true, changeNotes: cv.changeNotes };
+    return { cvPath: outPath, tailored: true, changeNotes: notes };
   } catch (err) {
     logger.warn(`[cv] Could not write tailored CV for ${job.title}: ${String(err)}`);
     return fallback;
