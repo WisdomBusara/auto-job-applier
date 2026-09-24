@@ -8,21 +8,11 @@
  * route the job to a driver that knows the form.
  */
 
-import axios from "axios";
 import * as cheerio from "cheerio";
 import { logger } from "../utils/logger.js";
+import { getJson } from "../utils/http.js";
 
 export type AtsName = "greenhouse" | "lever" | "ashby" | "workable";
-
-const HTTP = axios.create({
-  timeout: 15_000,
-  maxRedirects: 5,
-  headers: {
-    "User-Agent":
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
-    Accept: "text/html,application/xhtml+xml",
-  },
-});
 
 const ATS_PATTERNS: Array<{ ats: AtsName; re: RegExp }> = [
   { ats: "greenhouse", re: /(?:boards|job-boards)\.greenhouse\.io|greenhouse\.io\/embed/i },
@@ -56,10 +46,17 @@ export async function resolveApplyUrl(
   if (direct) return { url: listingUrl, ats: direct };
 
   try {
-    const res = await HTTP.get(listingUrl);
+    const res = await getJson<string>(listingUrl, {
+      maxRedirects: 5,
+      headers: { Accept: "text/html,application/xhtml+xml" },
+    });
+    if (res.status !== 200) {
+      logger.warn(`[ats] ${listingUrl}: HTTP ${res.status}`);
+      return { url: listingUrl, ats: null };
+    }
 
     // A redirect chain may have landed us on the ATS directly.
-    const finalUrl = String(res.request?.res?.responseUrl ?? listingUrl);
+    const finalUrl = res.finalUrl;
     const afterRedirect = detectAts(finalUrl);
     if (afterRedirect) return { url: finalUrl, ats: afterRedirect };
 

@@ -7,20 +7,11 @@
  * Listing URLs are resolved to a real apply URL later, in ats.ts.
  */
 
-import axios from "axios";
 import * as cheerio from "cheerio";
 import { logger } from "../utils/logger.js";
+import { getJson } from "../utils/http.js";
 import type { Job, UserProfile } from "../types/index.js";
 import { v4 as uuidv4 } from "uuid";
-
-const HTTP = axios.create({
-  timeout: 15_000,
-  headers: {
-    "User-Agent":
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
-    Accept: "text/html,application/json",
-  },
-});
 
 export interface RemoteScrapedJob {
   title: string;
@@ -44,9 +35,15 @@ async function scrapeWeWorkRemotely(): Promise<RemoteScrapedJob[]> {
     const baseUrl = "https://weworkremotely.com/remote-jobs/search";
 
     // Search for tech roles with salary filter
-    const response = await HTTP.get(baseUrl, {
-      params: { term: "remote" },
+    const response = await getJson<string>(`${baseUrl}?term=remote`, {
+      headers: { Accept: "text/html,application/xhtml+xml" },
     });
+    if (response.status !== 200) {
+      // WeWorkRemotely answers non-browser clients with a Cloudflare managed
+      // challenge (403). Retrying harder will not help, so say so once.
+      logger.warn(`[remote-scraper] We Work Remotely: HTTP ${response.status} — skipping`);
+      return [];
+    }
 
     const $ = cheerio.load(response.data);
 
@@ -83,8 +80,8 @@ async function scrapeWeWorkRemotely(): Promise<RemoteScrapedJob[]> {
 async function scrapeRemoteOK(): Promise<RemoteScrapedJob[]> {
   try {
     const jobs: RemoteScrapedJob[] = [];
-    const response = await HTTP.get("https://remoteok.com/api", {
-      params: { action: "newest" },
+    const response = await getJson<unknown>("https://remoteok.com/api?action=newest", {
+      headers: { Accept: "application/json" },
     });
 
     const data = response.data;

@@ -18,17 +18,11 @@
  *     ATS_BOARDS="greenhouse:anthropic,ashby:ramp,lever:matchgroup"
  */
 
-import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../utils/logger.js";
+import { getJson, mapWithConcurrency, httpLimits } from "../utils/http.js";
 import type { Job, UserProfile } from "../types/index.js";
 import type { AtsName } from "./ats.js";
-
-const HTTP = axios.create({
-  timeout: 20_000,
-  headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-  validateStatus: () => true,
-});
 
 export interface BoardRef {
   ats: AtsName;
@@ -80,10 +74,11 @@ const stripHtml = (s: string): string =>
 // ─── Greenhouse ───────────────────────────────────────────────────────────────
 
 async function fetchGreenhouse(token: string): Promise<BoardJob[]> {
-  const res = await HTTP.get(
-    `https://boards-api.greenhouse.io/v1/boards/${token}/jobs?content=true`
+  const res = await getJson<{ jobs?: Array<Record<string, any>> }>(
+    `https://boards-api.greenhouse.io/v1/boards/${token}/jobs?content=true`,
+    { headers: { Accept: "application/json" } }
   );
-  if (res.status !== 200) {
+  if (res.status !== 200 && !res.fromCache) {
     logger.warn(`[ats-boards] greenhouse/${token}: HTTP ${res.status}`);
     return [];
   }
@@ -113,8 +108,11 @@ async function fetchGreenhouse(token: string): Promise<BoardJob[]> {
 // ─── Lever ────────────────────────────────────────────────────────────────────
 
 async function fetchLever(token: string): Promise<BoardJob[]> {
-  const res = await HTTP.get(`https://api.lever.co/v0/postings/${token}?mode=json`);
-  if (res.status !== 200 || !Array.isArray(res.data)) {
+  const res = await getJson<Array<Record<string, any>>>(
+    `https://api.lever.co/v0/postings/${token}?mode=json`,
+    { headers: { Accept: "application/json" } }
+  );
+  if ((res.status !== 200 && !res.fromCache) || !Array.isArray(res.data)) {
     logger.warn(`[ats-boards] lever/${token}: HTTP ${res.status}`);
     return [];
   }
@@ -139,8 +137,11 @@ async function fetchLever(token: string): Promise<BoardJob[]> {
 // ─── Ashby ────────────────────────────────────────────────────────────────────
 
 async function fetchAshby(token: string): Promise<BoardJob[]> {
-  const res = await HTTP.get(`https://api.ashbyhq.com/posting-api/job-board/${token}`);
-  if (res.status !== 200) {
+  const res = await getJson<{ jobs?: Array<Record<string, any>>; name?: string }>(
+    `https://api.ashbyhq.com/posting-api/job-board/${token}`,
+    { headers: { Accept: "application/json" } }
+  );
+  if (res.status !== 200 && !res.fromCache) {
     logger.warn(`[ats-boards] ashby/${token}: HTTP ${res.status}`);
     return [];
   }
@@ -187,8 +188,7 @@ export async function fetchAtsBoardJobs(profile: UserProfile): Promise<Job[]> {
   const boards = configuredBoards();
   logger.info(`[ats-boards] Querying ${boards.length} board(s)`);
 
-  const results = await Promise.all(
-    boards.map(async (b) => {
+  const results = await mapWithConcurrency(boards, httpLimits.concurrency, async (b) => {
       try {
         const jobs =
           b.ats === "greenhouse" ? await fetchGreenhouse(b.token)
@@ -199,10 +199,9 @@ export async function fetchAtsBoardJobs(profile: UserProfile): Promise<Job[]> {
         return jobs;
       } catch (err) {
         logger.warn(`[ats-boards] ${b.ats}/${b.token} failed: ${String(err)}`);
-        return [];
-      }
-    })
-  );
+      return [];
+    }
+  });
 
   const all = results.flat();
   const matched = all.filter((j) => matchesProfile(j, profile));

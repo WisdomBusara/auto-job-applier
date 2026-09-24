@@ -212,11 +212,23 @@ export const sqliteDb: DbAdapter = {
     const now = new Date().toISOString();
     const ex = sqlite.prepare("SELECT id FROM jobs WHERE platform=? AND external_id=?").get(job.platform, job.externalId) as {id:string}|undefined;
     if (ex) {
+      // Refresh the posting, but never discard work already done on it.
+      // Rediscovery passes matchScore: null, and scoreJobs re-scores anything
+      // null — overwriting here meant paying the model again for every known
+      // job on every run. Scoring and status are kept unless the caller has
+      // something better to put there.
+      const prev = sqliteDb.getJobById(ex.id) as Job;
       sqlite.prepare("UPDATE jobs SET title=?,company=?,location=?,description=?,url=?,salary=?,remote=?,seniority=?,employment_type=?,posted_at=?,status=?,match_score=?,match_justification=?,risks_gaps=?,ai_recommendation=?,prediction=?,confidence=?,updated_at=? WHERE id=?").run(
         job.title,job.company,job.location,job.description,job.url,job.salary,job.remote?1:0,
-        job.seniority,job.employmentType,job.postedAt,job.status,job.matchScore,
-        JSON.stringify(job.matchJustification),job.risksGaps,job.aiRecommendation,
-        job.prediction,job.confidence,now,ex.id);
+        job.seniority,job.employmentType,job.postedAt,
+        prev.status === "pending" ? job.status : prev.status,
+        job.matchScore        ?? prev.matchScore,
+        JSON.stringify(job.matchJustification?.length ? job.matchJustification : prev.matchJustification),
+        job.risksGaps         ?? prev.risksGaps,
+        job.aiRecommendation  ?? prev.aiRecommendation,
+        job.prediction        ?? prev.prediction,
+        job.confidence        ?? prev.confidence,
+        now,ex.id);
       return sqliteDb.getJobById(ex.id) as Job;
     }
     const id = uuidv4();

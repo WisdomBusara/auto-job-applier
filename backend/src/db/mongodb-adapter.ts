@@ -249,13 +249,19 @@ export const mongoDbAdapter: DbAdapter = {
             seniority: job.seniority,
             employmentType: job.employmentType,
             postedAt: job.postedAt,
-            status: job.status,
-            matchScore: job.matchScore,
-            matchJustification: job.matchJustification,
-            risksGaps: job.risksGaps,
-            aiRecommendation: job.aiRecommendation,
-            prediction: job.prediction,
-            confidence: job.confidence,
+            // Refresh the posting without discarding work already done on it.
+            // Rediscovery passes matchScore: null, and scoreJobs re-scores
+            // anything null, so overwriting here meant paying the model again
+            // for every known job on every run.
+            status: existing.status === "pending" ? job.status : existing.status,
+            matchScore: job.matchScore ?? existing.matchScore,
+            matchJustification: job.matchJustification?.length
+              ? job.matchJustification
+              : existing.matchJustification,
+            risksGaps: job.risksGaps ?? existing.risksGaps,
+            aiRecommendation: job.aiRecommendation ?? existing.aiRecommendation,
+            prediction: job.prediction ?? existing.prediction,
+            confidence: job.confidence ?? existing.confidence,
             updatedAt: now,
           },
         }
